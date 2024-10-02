@@ -8,8 +8,8 @@ server_name = os.uname()[1]
 remote_root = "/data/hanyang/sepsis/"
 
 
-prefix = "cohort_combined"
-raw_data_path = os.path.join(remote_root, "cohort_combined")
+prefix = "cohort3"
+raw_data_path = os.path.join(remote_root, "cohort_3")
 manual_data_path = os.path.join(remote_root, "manual_tables")
 remote_project_path = os.path.join(remote_root, project_name)
 processed_data_path = os.path.join(raw_data_path, "data_processed")

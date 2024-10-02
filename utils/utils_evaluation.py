@@ -1,11 +1,11 @@
 import numpy as np
 from sklearn import preprocessing, metrics
 import matplotlib.pyplot as plt
+import matplotlib
 import shap
 import pandas as pd
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from .utils_data import select_subgroup, instance_filter
-import torch
 
 
 def evaluate(model, X_test, y_test, verbose=0, plot=False, N=1000):
@@ -39,7 +39,9 @@ def evaluate(model, X_test, y_test, verbose=0, plot=False, N=1000):
     return auroc, auprc, TPR, PREC
 
 
-def evaluate_multi_NN(y_probs, y_test, verbose=0, plot=False, N=1000):
+def evaluate_multi(model, X_test, y_test, verbose=0, plot=False, N=1000):
+    # Testing
+    y_probs = model.predict_proba(X_test)
     auroc, auprc, TPR, PREC = dict(), dict(), dict(), dict()
 
     for i in range(np.shape(y_probs)[1]):
@@ -84,7 +86,8 @@ def plot_roc(fpr, tpr, std=None, auc=None, multiclass=False, labels=None, prefix
         if std.any(): plt.fill_between(fpr, tpr - std, tpr + std, alpha=0.5, label='std = %0.4f' % auc[1])
     else:
         for i in range(len(tpr)):
-            plt.plot(fpr, tpr[i], label='{}, '.format(labels[i]) + 'AUC %0.2f' % auc[0][i] + ' (%0.3f)' % auc[1][i], color=colors[i])
+            plt.plot(fpr, tpr[i], label='{}, '.format(labels[i]) + 'AUC %0.2f' % auc[0][i] + ' (%0.3f)' % auc[1][i],
+                     color=colors[i])
             if std.any(): plt.fill_between(fpr, tpr[i] - std[i], tpr[i] + std[i], alpha=0.5, color=colors[i])
     plt.legend(loc='lower right', fontsize=12)
     plt.plot([0, 1], [0, 1], 'k--')
@@ -108,7 +111,8 @@ def plot_prc(rec, prec, std=None, auc=None, multiclass=False, labels=None, prefi
         if std.any(): plt.fill_between(rec, prec - std, prec + std, alpha=0.5, label='std = %0.4f' % auc[1])
     else:
         for i in range(len(prec)):
-            plt.plot(rec, prec[i], label='{}, '.format(labels[i]) + 'AUC %0.2f' % auc[0][i] + ' (%0.3f)' % auc[1][i], color=colors[i])
+            plt.plot(rec, prec[i], label='{}, '.format(labels[i]) + 'AUC %0.2f' % auc[0][i] + ' (%0.3f)' % auc[1][i],
+                     color=colors[i])
             if std.any(): plt.fill_between(rec, prec[i] - std[i], prec[i] + std[i], alpha=0.5, color=colors[i])
     plt.legend(loc='upper left', fontsize=12)
     plt.xlim([0, 1])
@@ -138,7 +142,8 @@ def custom_summary_plot(model, data_eval):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(data_eval)
     vals = np.abs(shap_values).mean(0)
-    feature_importance = pd.DataFrame(list(zip(data_eval.columns, vals)), columns=['col_name', 'feature_importance_vals'])
+    feature_importance = pd.DataFrame(list(zip(data_eval.columns, vals)),
+                                      columns=['col_name', 'feature_importance_vals'])
     feature_importance.sort_values(by=['feature_importance_vals'], ascending=False, inplace=True)
     feature_importance.set_index('col_name', inplace=True)
 
@@ -170,31 +175,91 @@ def model_explain_all(model, data_eval, prefix=None):
     plt.savefig("plot/{}-beeswarm.pdf".format(prefix), bbox_inches="tight")
 
 
-def model_explain_multiclass(model, data_eval, prefix=None):
+def model_explain_multiclass(model, data_eval, prefix=None, max_display=10):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(data_eval.values)
     feature_names = [name.split(',')[0] for name in data_eval.columns]
 
+    inds = [feature_names.index('time_since_admission'), feature_names.index('resistance_history')]
+    if 'initial' in prefix:
+        for x in shap_values:
+            x[:, inds] = 0
+
+    name_dict = {
+        'B96.5': 'History of P. aeruginosa',
+        'resistance_history': "History of resistance in same admission",
+        'time_since_admission': 'Time since admission',
+        'B96.89': 'History of antibiotic administration',
+        'lab_ALBUMIN': 'Albumin',
+        'J15.1': 'History of pneumonia due to P. aeruginosa',
+        'age_yrs': 'Age (years)',
+        'lab_HEMOGLOBIN': 'Hemoglobin',
+        'lab_LYMPHOCYTES': 'Lymphocyte count',
+        'Z16.24': 'History of resistance to multiple antibiotics',
+        'R65.21': 'History of severe sepsis or septic shock',
+        'B96.20': 'History of E.coli',
+        'Z16.12': 'History of ESBL',
+        'A41.52': 'History of sepsis due to P. aeruginosa',
+        'N39.0': 'History of urinary tract infection',
+        'lab_PLATELETS': 'Platelet count',
+        'lab_NEUTROPHILS': 'Neutrophil count',
+        'J15.6': 'Pneumonia due to other GNB',
+        'Y33.XXXA': 'Initial encounter',
+        'vital_OXYGEN (O2) THERAPY': 'Vital oxygen therapy',
+        'J04.10': 'History of acute tracheitis',
+        'lab_PO2': 'Arterial partial pressure of O2',
+        'lab_PCO2': 'Arterial partial pressure of CO2',
+        'lab_LACTIC ACID': 'Lactic acid',
+        'lab_ALANINE TRANSAMINASE (ALT)': 'ALT',
+        'lab_CREATININE': "Creatinine",
+        'lab_RESPIRATIONS': "Respirations",
+        'lab_UREA NITROGEN (BUN)': 'Blood urea nitrogen',
+        'vital_VENTILATOR PEEP VALUE': 'PEEP value (ventilator)',
+        'vital_BODY MASS INDEX': 'BMI',
+        'pneumonia_community': 'Community-acquired pneumonia',
+        'vital_RESPIRATIONS': 'Respiratory rate',
+        'readmission': 'Previous hospitalization',
+        "A41.59": "History of other GNB sepsis",
+        "lab_MONOCYTES": "Monocyte count",
+        "lab_PH": "pH",
+        "lab_WBCS": "WBC count",
+        "vital_BLOOD PRESSURE": "Blood Pressure",
+        "Z79.4": "History of long term use of insulin",
+        "A41.51": "History of sepsis due to Escherichia coli"
+    }
+
+    names = []
+    for name in feature_names:
+        if name in name_dict:
+            names.append(name_dict[name])
+        else:
+            names.append(name)
+
+    feature_names = names
+
     plt.figure()
     shap.summary_plot(shap_values, data_eval.values, plot_type="bar", class_names=['SS', 'RS', 'RR'],
+                      color=matplotlib.colors.ListedColormap(['limegreen', 'royalblue', 'darkviolet']),
                       feature_names=feature_names,
-                      max_display=20,
+                      max_display=max_display,
                       show=False)
-    plt.savefig("plot/{}-summary-all.pdf".format(prefix), bbox_inches="tight")
+    plt.savefig("plot/{}-summary-all.svg".format(prefix), bbox_inches="tight")
+    plt.show()
 
     plt.figure()
-    shap.summary_plot(shap_values[0], data_eval.values, feature_names=feature_names, show=False)
-    plt.savefig("plot/{}-summary-SS.pdf".format(prefix), bbox_inches="tight")
+    shap.summary_plot(shap_values[0], data_eval.values, feature_names=feature_names, max_display=max_display, show=False)
+    plt.savefig("plot/{}-summary-SS.svg".format(prefix), bbox_inches="tight")
+    plt.show()
 
     plt.figure()
-    shap.summary_plot(shap_values[1], data_eval.values, feature_names=feature_names, show=False)
-    plt.savefig("plot/{}-summary-RS.pdf".format(prefix), bbox_inches="tight")
+    shap.summary_plot(shap_values[1], data_eval.values, feature_names=feature_names, max_display=max_display, show=False)
+    plt.savefig("plot/{}-summary-RS.svg".format(prefix), bbox_inches="tight")
+    plt.show()
 
     plt.figure()
-    shap.summary_plot(shap_values[2], data_eval.values, feature_names=feature_names, show=False)
-    plt.savefig("plot/{}-summary-RR.pdf".format(prefix), bbox_inches="tight")
-
-
+    shap.summary_plot(shap_values[2], data_eval.values, feature_names=feature_names, max_display=max_display, show=False)
+    plt.savefig("plot/{}-summary-RR.svg".format(prefix), bbox_inches="tight")
+    plt.show()
 
 
 def evaluate_false_samples(model, X_test, y_test):
@@ -222,7 +287,8 @@ def evaluate_false_samples(model, X_test, y_test):
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['CRO-S', 'CRO-R'])
         disp.plot()
         plt.show()
-    except: pass
+    except:
+        pass
 
     # X_TP = X_test[np.logical_and(y_test == 1, y_test == (y_prob > best_thresh))]
     # X_TN = X_test[np.logical_and(y_test == 0, y_test == (y_prob > best_thresh))]
@@ -274,7 +340,8 @@ def search_best_f1(y_test, y_prob, granularity=0.0001):
 
 def evaluate_binary(models, X_test, y_test, args):
     # hospital_ids = ["all"] + X_test.columns.tolist()[:10]
-    hospital_ids = ['hospital_id_2574', 'hospital_id_3148', 'hospital_id_5107', 'hospital_id_6729']
+    # hospital_ids = ['all', 'hospital_id_2574', 'hospital_id_3148', 'hospital_id_5107', 'hospital_id_6729']
+    hospital_ids = ['all']
     rows = []
     # select subgroup in test set
     for g in range(12 + 1):
@@ -285,13 +352,12 @@ def evaluate_binary(models, X_test, y_test, args):
         print('Testing subgroup {}...'.format(g))
 
         # instance stage filtering
-        for infection_instance in ['initial', 'subsequent']:
+        for infection_instance in ['all', 'initial', 'subsequent']:
             prefix = 'Subgroup_{}-{}_instances'.format(g, infection_instance)
             print(prefix)
             selected_instances = instance_filter(X_test.index.tolist(), mode=infection_instance)
             X_test_selected, y_test_selected = X_test_sub[X_test_sub.index.isin(selected_instances)], \
                                                y_test_sub[y_test_sub.index.isin(selected_instances)]
-
 
             for hospital_id in hospital_ids:
                 if hospital_id != "all":
@@ -328,7 +394,7 @@ def evaluate_binary(models, X_test, y_test, args):
                     #     evaluate_false_samples(models[i], X_test_selected, y_test_selected.astype(int))
 
                 print("AU-ROC:", "%0.4f" % np.mean(AUROC), "(%0.4f)" % np.std(AUROC),
-                      "AU-PRC:", "%0.4f" % np.mean(AUPRC), "(%0.4f)" % np.std(AUPRC),)
+                      "AU-PRC:", "%0.4f" % np.mean(AUPRC), "(%0.4f)" % np.std(AUPRC), )
                 print('--------------------------------------------')
 
                 rows.append({
@@ -357,8 +423,3 @@ def evaluate_binary(models, X_test, y_test, args):
     df_results.to_csv("../data_analysis/subgroup_performance_hospital.csv")
 
     return df_results
-
-
-
-
-

@@ -3,14 +3,13 @@ import numpy as np
 from sklearn import preprocessing, metrics
 from os.path import join
 
-
 # path
 raw_data_dir = '../cohort_3/'
 save_data_dir = '../data_prepared/'
 analysis_dir = '../manual_tables/'
 
 
-def load_data(select_feats=False, feats='last'):
+def load_data(select_feats=False, feats='last', full_comorb=False):
     # initial table
     labels_raw = pd.read_csv(join(save_data_dir, 'df_label_full.csv'))
     data_table = labels_raw[['patient_id', 'admission_id', 'infection_id', 'SS', 'RS', 'RR', 'UN', 'GNB']]
@@ -108,7 +107,19 @@ def load_data(select_feats=False, feats='last'):
     tmp = normalizer.fit_transform(data_table.iloc[:, 10:])
     data_table.iloc[:, 10:] = tmp
 
-    return data_table.set_index(['patient_id', 'admission_id', 'infection_id'])
+    # load comorbidities
+    if full_comorb:
+        comorb = pd.read_csv(join(save_data_dir, 'data_comorb.csv'))
+        data_table = data_table.merge(comorb, how='left', on=['patient_id', 'admission_id'])
+        data_table = data_table.fillna(value=0)
+    else:
+        comorb = pd.read_csv(join(save_data_dir, 'data_comorb_fam.csv'))
+        data_table = data_table.merge(comorb, how='left', on=['patient_id', 'admission_id'])
+        data_table = data_table.fillna(value=0)
+
+    data_table = data_table.set_index('admission_instance')
+
+    return data_table
 
 
 def RandomizedGroupKFold(groups, n_splits, random_state=None):  # noqa: N802
@@ -142,82 +153,46 @@ def instance_filter(instances, mode='all'):
 
 def select_subgroup(df_data, group='1'):
     if group == '0':
-        return df_data[['patient_id', 'admission_id', 'infection_id']]  # white
-    # elif group == '1':
-    #     return df_data[df_data.race_1 == 1][['patient_id', 'admission_id', 'infection_id']]   # white
-    # elif group == '2':
-    #     return df_data[df_data.race_2 == 1][['patient_id', 'admission_id', 'infection_id']]   # black
+        return df_data.index  # white
     elif group == '1':
-        return df_data[df_data.age_yrs >= 65 / 121.0][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[df_data.race_1 == 1].index  # white
     elif group == '2':
-        return df_data[df_data.age_yrs < 65 / 121.0][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[df_data.race_2 == 1].index  # black
     elif group == '3':
-        J15 = df_data.filter(like='J15', axis=1).sum(axis=1)
-        return df_data[J15 > 0][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[df_data.age_yrs >= 65 / 121.0].index
     elif group == '4':
-        A41 = df_data.filter(like='A41', axis=1).sum(axis=1)
-        return df_data[A41 > 0][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[df_data.age_yrs < 65 / 121.0].index
     elif group == '5':
-        return df_data[df_data.B96 > 0][['patient_id', 'admission_id', 'infection_id']]
+        J15 = df_data.filter(like='J15', axis=1).sum(axis=1)
+        return df_data[J15 > 0].index
     elif group == '6':
-        return df_data[df_data.Z16 > 0][['patient_id', 'admission_id', 'infection_id']]
+        A41 = df_data.filter(like='A41', axis=1).sum(axis=1)
+        return df_data[A41 > 0].index
     elif group == '7':
         cols = [col for col in df_data.columns if 'A41' in col or 'B96' in col or 'J15' in col or 'Z16' in col]
         if_selected = ~df_data[cols].sum(axis=1).astype(bool)
-        return df_data[if_selected][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[if_selected].index
     elif group == '8':
+        return df_data[
+            np.logical_and(df_data.age_yrs < 45 / 121.0, df_data.filter(like='N10', axis=1).sum(axis=1) > 0)].index
+    elif group == '9':
         # any comorbidities in C81-C96
         if_selected = (df_data.filter(regex='C8').sum(axis=1) + df_data.filter(regex='C9').sum(axis=1)).astype(bool)
-        return df_data[if_selected][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '9':
-        return df_data[df_data.filter(like='Z94', axis=1).sum(axis=1) > 0][['patient_id', 'admission_id', 'infection_id']]
+        return df_data[if_selected].index
     elif group == '10':
+        return df_data[df_data.filter(like='Z94', axis=1).sum(axis=1) > 0].index
+    elif group == '11':
         comorb = pd.read_csv('../cohort_3/cohort3_diagnoses_for_comorbidities.csv', low_memory=False)
-        pids = comorb[comorb.ICDX_DIAGNOSIS_CODE.str.contains('K70.3')].reference_no.unique().tolist()
+        pids = comorb[comorb.ICDX_DIAGNOSIS_CODE == 'K70.30'].reference_no.unique().tolist()
         instances = pd.read_csv('../data_analysis/instance_to_patient_id.csv')
         inst = instances[instances.patient_id.isin(pids)].admission_id.astype(str).unique().tolist()
-        return df_data[df_data.admission_id.astype(str).isin(inst)][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '11':
+        df = df_data[['age_yrs']]
+        df['admission_instance'] = df.index
+        df['admission_id'] = df.admission_instance.apply(lambda x: x.split('-')[0])
+        return df_data[df.admission_id.isin(inst)].index
+    elif group == '12':
         vasop = pd.read_csv(join(save_data_dir, 'data_last_vasop_by_instance.csv')).drop(
             columns=['patient_id', 'admission_id'])
         vasop_names = vasop.columns[1:]
         if_selected = df_data[vasop_names].sum(axis=1).astype(bool)
-        return df_data[if_selected][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '12':
-        return df_data[df_data.mechanical_ventilation > 0][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '13':
-        return df_data[np.logical_and(df_data.age_yrs < 45 / 121.0, df_data.filter(like='N10', axis=1).sum(axis=1) > 0)][['patient_id', 'admission_id', 'infection_id']]
-
-    elif group == '14':
-        return df_data[df_data.hospital_id_2574 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '15':
-        return df_data[df_data.hospital_id_3148 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '16':
-        return df_data[df_data.hospital_id_5107 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '17':
-        return df_data[df_data.hospital_id_6729 == 1][['patient_id', 'admission_id', 'infection_id']]
-
-
-def select_hospital(df_data, group='0'):
-    if group == '0':
-        return df_data[df_data.hospital_id_2572 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '1':
-        return df_data[df_data.hospital_id_2574 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '2':
-        return df_data[df_data.hospital_id_3049 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '3':
-        return df_data[df_data.hospital_id_3148 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '4':
-        return df_data[df_data.hospital_id_3269 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '5':
-        return df_data[df_data.hospital_id_4674 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '6':
-        return df_data[df_data.hospital_id_5107 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '7':
-        return df_data[df_data.hospital_id_5572 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '8':
-        return df_data[df_data.hospital_id_6729 == 1][['patient_id', 'admission_id', 'infection_id']]
-    elif group == '9':
-        return df_data[df_data.hospital_id_160559 == 1][['patient_id', 'admission_id', 'infection_id']]
-
-
+        return df_data[if_selected].index

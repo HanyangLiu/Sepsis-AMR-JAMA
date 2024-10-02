@@ -100,54 +100,54 @@ if __name__ == "__main__":
         # model.save_model('saved_models/multiclass_{}_{}_{}_complete_2.json'.format(args.model, prefix, rs))
         models.append(model)
 
-    # for infection_instance in ['initial', 'subsequent']:
-    #     prefix = "full_comorb_{}".format(infection_instance) if args.full_comorb else "fam_comorb_{}".format(
-    #         infection_instance)
-    #     selected_instances = instance_filter(data.index.tolist(), mode=infection_instance)
-    #     X_test_selected, y_test_selected = X_test[X_test.index.isin(selected_instances)], \
-    #                                        y_test[y_test.index.isin(selected_instances)]
-    #
-    #     # evaluate each class
-    #     AUROC, AUPRC = [], []
-    #     N = 1000
-    #     TPRs, PRECs = np.empty(shape=(3, args.n_repeat, N)), np.empty(shape=(3, args.n_repeat, N))
-    #     for i, rs in enumerate(range(args.n_repeat)):
-    #         # train model
-    #         model = models[i]
-    #         # evaluate model
-    #         auroc, auprc, TPR, PREC = evaluate_multi(model, X_test_selected, y_test_selected.astype(int), N=N,
-    #                                                  verbose=0)
-    #         AUROC.append(list(auroc.values()))
-    #         AUPRC.append(list(auprc.values()))
-    #         TPRs[:, i, :] = np.array([TPR[i] for i in TPR.keys()])
-    #         PRECs[:, i, :] = np.array([PREC[i] for i in PREC.keys()])
-    #
-    #         if i == 0: model_explain_multiclass(models[i], X_test_selected, prefix=prefix)
-    #
-    #     for i in range(3):
-    #         print('--------------------------------------------')
-    #         print('5 Random Initialization Evaluation:')
-    #         print('--------------------------------------------')
-    #         print("AU-ROC:", "%0.4f" % np.mean(np.array(AUROC)[:, i]), "(%0.4f)" % np.std(np.array(AUROC)[:, i]),
-    #               "AU-PRC:", "%0.4f" % np.mean(np.array(AUPRC)[:, i]), "(%0.4f)" % np.std(np.array(AUPRC)[:, i]), )
-    #         print('--------------------------------------------')
-    #
-    #     tpr_mean, tpr_std = np.mean(TPRs, axis=1), np.std(TPRs, axis=1)
-    #     prec_mean, prec_std = np.mean(PRECs, axis=1), np.std(PRECs, axis=1)
-    #
-    #     prefix_name = 'Community_acquired' if infection_instance == 'initial' else 'Hospital_acquired'
-    #
-    #     x = np.linspace(0, 1, N + 1)[:N]
-    #     label_names = ['SS', 'RS', 'RR']
-    #     plot_roc(x, tpr_mean, tpr_std,
-    #              auc=[np.mean(np.array(AUROC), axis=0), np.std(np.array(AUROC), axis=0)],
-    #              multiclass=True,
-    #              labels=label_names,
-    #              prefix=prefix_name)
-    #     plot_prc(x, prec_mean, prec_std,
-    #              auc=[np.mean(np.array(AUPRC), axis=0), np.std(np.array(AUPRC), axis=0)],
-    #              multiclass=True,
-    #              labels=label_names,
-    #              prefix=prefix_name)
+    for infection_instance in ['initial', 'subsequent']:
+        prefix = "full_comorb_{}".format(infection_instance) if args.full_comorb else "fam_comorb_{}".format(
+            infection_instance)
+        selected_instances = instance_filter(data.index.tolist(), mode=infection_instance)
+        X_test_selected, y_test_selected = X_test[X_test.index.isin(selected_instances)], \
+                                           y_test[y_test.index.isin(selected_instances)]
+
+        # evaluate each class
+        AUROC, AUPRC = [], []
+        N = 1000
+        TPRs, PRECs = np.empty(shape=(3, args.n_repeat, N)), np.empty(shape=(3, args.n_repeat, N))
+        for i, rs in enumerate(range(args.n_repeat)):
+            # train model
+            model = models[i]
+            # evaluate model
+            auroc, auprc, TPR, PREC = evaluate_multi(model, X_test_selected, y_test_selected.astype(int), N=N,
+                                                     verbose=0)
+            AUROC.append(list(auroc.values()))
+            AUPRC.append(list(auprc.values()))
+            TPRs[:, i, :] = np.array([TPR[i] for i in TPR.keys()])
+            PRECs[:, i, :] = np.array([PREC[i] for i in PREC.keys()])
+
+            if i == 0: model_explain_multiclass(models[i], X_test_selected, prefix=prefix)
+
+        for i in range(3):
+            print('--------------------------------------------')
+            print('5 Random Initialization Evaluation:')
+            print('--------------------------------------------')
+            print("AU-ROC:", "%0.4f" % np.mean(np.array(AUROC)[:, i]), "(%0.4f)" % np.std(np.array(AUROC)[:, i]),
+                  "AU-PRC:", "%0.4f" % np.mean(np.array(AUPRC)[:, i]), "(%0.4f)" % np.std(np.array(AUPRC)[:, i]), )
+            print('--------------------------------------------')
+
+        tpr_mean, tpr_std = np.mean(TPRs, axis=1), np.std(TPRs, axis=1)
+        prec_mean, prec_std = np.mean(PRECs, axis=1), np.std(PRECs, axis=1)
+
+        prefix_name = 'Community_acquired' if infection_instance == 'initial' else 'Hospital_acquired'
+
+        x = np.linspace(0, 1, N + 1)[:N]
+        label_names = ['SS', 'RS', 'RR']
+        plot_roc(x, tpr_mean, tpr_std,
+                 auc=[np.mean(np.array(AUROC), axis=0), np.std(np.array(AUROC), axis=0)],
+                 multiclass=True,
+                 labels=label_names,
+                 prefix=prefix_name)
+        plot_prc(x, prec_mean, prec_std,
+                 auc=[np.mean(np.array(AUPRC), axis=0), np.std(np.array(AUPRC), axis=0)],
+                 multiclass=True,
+                 labels=label_names,
+                 prefix=prefix_name)
 
     df_results = evaluate_binary(models, X_test, y_test, args)
