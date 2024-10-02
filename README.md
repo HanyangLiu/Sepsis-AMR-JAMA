@@ -2,7 +2,7 @@ Code for the paper "Performance of risk models for antimicrobial resistance in a
 
 ### Setup
 ```
-pip install torch torchvision networkx node2vec
+pip install torch torchvision networkx node2vec xgboost shap scikit-learn
 ```
 Change paths in file ```.paths.py```
 
